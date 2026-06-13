@@ -107,7 +107,10 @@ def simulate(
     def _record(k: int) -> None:
         density = np.abs(psi) ** 2
         total = float(np.sum(density))
-        norm_arr[k] = float(np.sqrt(total))
+        norm_arr[k] = float(np.sqrt(total)) if total > 0 else 0.0
+        if not (total > 0):
+            ef_arr[k] = eg2_arr[k] = prob_arr[k] = np.nan
+            return
         # Always use normalized density so observables are proper expectations.
         norm_density = density / total
         ef_arr[k] = float(np.sum(norm_density * f_grid))
@@ -134,7 +137,7 @@ def simulate(
         t += h
         # Record norm before any renormalization so drift is visible.
         _record(k)
-        if renormalize:
+        if renormalize and norm_arr[k] > 0:
             psi /= norm_arr[k]  # norm_arr[k] already computed in _record
         if verbose and k % 20 == 0:
             print(f"  step {k:4d}/{K}  E[f]={ef_arr[k]:.4f}  "

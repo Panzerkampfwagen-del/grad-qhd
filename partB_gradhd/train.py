@@ -213,7 +213,7 @@ def train_model(
                   f"train {tr_loss:.4f}/{tr_acc:.3f}  "
                   f"val {va_loss:.4f}/{va_acc:.3f}  {dt:.1f}s")
 
-    te_loss, te_acc = evaluate(model, test_loader, criterion, device, max_batches)
+    te_loss, te_acc = evaluate(model, test_loader, criterion, device, None)
     if verbose:
         print(f"  [{optimizer_name} seed{seed}] TEST  {te_loss:.4f}/{te_acc:.3f}")
 

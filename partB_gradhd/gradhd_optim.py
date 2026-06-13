@@ -78,7 +78,9 @@ class GradHD(Optimizer):
     gamma : float, default 0.0
         Time-decaying gradient boost.  gamma=0 → Adam exactly.
     weight_decay : float, default 0.0
-        L2 regularization coefficient (applied to raw gradient, same as AdamW).
+        L2 regularization coefficient.  Applied to the raw gradient before the
+        moment updates (Adam-style coupled L2), NOT AdamW's decoupled weight
+        decay.  No experiment in this repo uses weight_decay != 0.
     """
 
     def __init__(
@@ -133,7 +135,7 @@ class GradHD(Optimizer):
                 if g.is_sparse:
                     raise RuntimeError("GradHD does not support sparse gradients.")
 
-                # Optional L2 regularization (same convention as AdamW)
+                # Adam-style coupled L2 (adds wd*p to gradient before moments).
                 if wd != 0.0:
                     g = g.add(p, alpha=wd)
 

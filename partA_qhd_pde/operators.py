@@ -126,10 +126,13 @@ def dealias(psi: np.ndarray) -> np.ndarray:
     norm-preserving throughout the simulation.
     """
     N = psi.shape[0]
-    c = N // 3  # keep indices 0..c-1 and N-c..N-1
+    # Keep indices 0..c-1 and N-c+1..N-1, i.e. freqs {0..+(c-1), -(c-1)..-1}.
+    # Zeroing N-c as well ensures the band is conjugate-symmetric: both +c and -c
+    # are excluded, so the dealiased subspace has an antisymmetric derivative KX.
+    c = N // 3
     psi_k = np.fft.fft2(psi)
-    psi_k[c : N - c, :] = 0.0
-    psi_k[:, c : N - c] = 0.0
+    psi_k[c : N - c + 1, :] = 0.0
+    psi_k[:, c : N - c + 1] = 0.0
     return np.fft.ifft2(psi_k)
 
 
@@ -217,6 +220,14 @@ def apply_H2(
     # matvecs, so the default is catastrophically slow for large N or large ||h*L||).
     # For a well-conditioned system (||half*L|| < 30) 20 restart cycles is plenty.
     psi_new, _info = _gmres(A_lhs, b, x0=psi_flat, rtol=tol, atol=0, maxiter=20)
+    if _info != 0:
+        import warnings
+        warnings.warn(
+            f"apply_H2 GMRES did not converge (info={_info}); "
+            "the CN step is non-unitary and psi may be physically wrong. "
+            "Reduce h or alpha to keep ||half*L|| small.",
+            RuntimeWarning, stacklevel=2,
+        )
     return psi_new.reshape(N, N)
 
 

@@ -34,8 +34,8 @@ GRAD_QHD_CONFIGS: dict[str, dict] = {
 }
 
 BASELINE_CONFIGS: dict[str, dict] = {
-    "sgdm": {"s0": 0.01, "mu": 0.9, "n_runs": 1000},
-    "nag":  {"s": 0.01,  "n_runs": 1000},
+    "sgdm": {"s0": 0.01, "mu": 0.9},
+    "nag":  {"s": 0.01},
 }
 
 # Default N for Part A simulations.  Reduce to 64 for quick smoke tests.

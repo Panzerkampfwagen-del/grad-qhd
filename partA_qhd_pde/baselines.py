@@ -133,7 +133,7 @@ def run_nag(
         g = np.column_stack([np.asarray(gx, float), np.asarray(gy, float)])
         pos_new = _clip_to_box(y - s * g, box)
         momentum = (k - 1) / (k + 2)
-        y = pos_new + momentum * (pos_new - pos)
+        y = _clip_to_box(pos_new + momentum * (pos_new - pos), box)
         pos = pos_new
         ef_arr[k], eg2_arr[k], prob_arr[k] = _observe(f_fn, grad_fn, pos, f_star, delta)
 
