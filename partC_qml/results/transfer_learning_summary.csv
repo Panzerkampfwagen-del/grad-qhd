@@ -1,0 +1,4 @@
+variant,seed,test_acc,grad_var_epoch1
+transfer,0,0.324375,2.757568e-04
+transfer,1,0.316875,1.624138e-04
+transfer,2,0.298750,2.794504e-04

@@ -1,18 +1,21 @@
 # grad-qhd
 
-A two-part study of **gradient-based Quantum Hamiltonian Descent (QHD)** —
+A three-part study of **gradient-based Quantum Hamiltonian Descent (QHD)** and
+**barren plateau mitigation in variational quantum circuits** —
 Leng & Shi, *"Quantum Optimization via Gradient-Based Hamiltonian Descent"*,
 ICML 2025 ([arXiv:2505.14670](https://arxiv.org/abs/2505.14670)).
 
 **Demonstrates:** a faithful classical PDE simulation of a quantum optimization
 algorithm in 2D; a classical QHD-inspired optimizer that comes out **neutral vs
-Adam** on real neural-network training; and a direct test pinning down *when* the
+Adam** on real neural-network training; a direct test pinning down *when* the
 quantum advantage exists at all — it is **landscape-dependent**, decisive only
-where local minima are dense enough to strand classical methods.
+where local minima are dense enough to strand classical methods; and an empirical
+study of barren plateau mitigation strategies for variational quantum circuits on
+real image classification.
 
 ---
 
-## The two parts, and the honest line between them
+## The three parts, and the honest line between them
 
 Gradient-based QHD evolves a quantum **wave function** ψ(t, x) over a spatial
 grid via a Schrödinger PDE, and reads out a solution by sampling |ψ|². Its power
@@ -27,11 +30,17 @@ this repo) is limited to 2D problems.
   the wave function and tunneling entirely. **It is not QHD, not quantum, and has
   no tunneling.** Its corrections come from a classical gradient-flow update, and
   with its three extra coefficients set to zero it is *exactly* Adam.
+- **Part C** is a study of **barren plateau mitigation** in quantum–classical
+  hybrid models (QCQ-CNN) for brain MRI classification. It characterises the
+  exponential gradient vanishing, then evaluates three mitigations: local cost
+  function, layer-by-layer training, and quantum transfer learning.
 
 These are kept strictly separate everywhere. The interesting scientific outcome
 is that Part B is **neutral vs Adam**, and — run on the same 2D landscapes as
 Part A — the QHD edge appears only where local minima are dense, evidence that
 QHD's advantage was the tunneling the classical discretization cannot reproduce.
+Part C's key finding is that **local measurements** (per-qubit Z_i instead of
+global Z⊗...⊗Z) is the single most impactful mitigation at small qubit counts.
 
 ---
 
@@ -230,6 +239,59 @@ decisively on Cube-Wave. Reproduce with `python -m partB_gradhd.run_2d_classical
 
 ---
 
+## Part C — Barren plateau mitigation for QCQ-CNN on brain MRI
+
+See [`partC_qml/README.md`](partC_qml/README.md) for full details, figures, and
+reproduce instructions.
+
+A **QCQ-CNN** (CNN encoder → VQC → linear classifier) is trained on 4-class
+brain MRI (glioma / meningioma / no-tumor / pituitary). The baseline VQC uses
+a global Z⊗Z⊗Z⊗Z observable; the 4-qubit, 4-layer hardware-efficient ansatz
+runs on PennyLane `default.qubit` (CPU statevector) while the CNN and classifier
+run on CUDA. Gradient flows across the CPU↔GPU boundary via PyTorch autograd.
+
+### Part 0 — Barren plateau characterisation (correctness gate)
+
+Gradient variance Var[∂L/∂θ] measured by parameter-shift at 200 random
+initialisations for each (n\_qubits, depth) pair:
+
+| | d=1 | d=2 | d=3 | d=4 | d=6 |
+|---|---|---|---|---|---|
+| **slope vs n (per qubit)** | −0.30 | −0.50 | −0.60 | −0.66 | **−0.67** |
+| **R²** | 0.82 | 0.99 | 0.98 | 0.99 | **1.00** |
+
+Theory (global observable, 2-design): slope ≈ −ln(2) ≈ −0.693. Measured at
+d=4: **−0.662** — consistent. Exponential gradient vanishing confirmed before
+any mitigation.
+
+### Results — head-to-head
+
+Brain MRI, 4-class. 3 seeds, 20 epochs each.
+
+| Variant | Test acc (mean ± std) | Grad var epoch 1 |
+|---|---|---|
+| Unmitigated — global Z⊗Z⊗Z⊗Z | 0.506 ± 0.047 | 4.12 × 10⁻⁴ |
+| **M1 — Local cost Σ⟨Z_i⟩** | **0.728 ± 0.022** | 1.64 × 10⁻⁴ |
+| M2 — Layer-by-layer training | 0.509 ± 0.031 | — |
+| M3 — Transfer learning (CIFAR-10) | 0.313 ± 0.011 | 2.39 × 10⁻⁴ |
+
+Random baseline: 25%.
+
+**M1 (local cost) is the only effective mitigation.** +22 pp accuracy from a
+single architectural change — measuring each qubit independently rather than
+their joint expectation — at zero cost in depth or qubit count.
+
+**M2 (layer-by-layer) gives no meaningful gain** because the fundamental
+bottleneck is the global measurement collapsing VQC output to one scalar; no
+schedule fixes an information bottleneck at measurement time.
+
+**M3 (transfer learning) fails due to domain gap.** The CIFAR-10 backbone
+extracts natural-image features incompatible with grayscale medical scan
+structure; the VQC and classifier have nothing useful to work with. This is a
+domain-gap failure, not a quantum failure.
+
+---
+
 ## Project layout
 
 ```
@@ -252,10 +314,26 @@ grad-qhd/
     run_experiments.py          # the head-to-head comparisons
     run_ablation.py             # the α/β/γ sweeps
     run_2d_classical.py         # GradHD vs QHD on the Part A 2D landscapes
+  partC_qml/
+    config.py                   # Part C hyperparameters (n_qubits, n_layers, seeds…)
+    README.md                   # full Part C writeup with all figures and conclusions
+    qmlcore/
+      circuit.py                # global + local QNode builders (HEA, backprop diff)
+      data.py                   # MRI data loader + set_seed
+      model.py                  # QCQCNN split CPU/GPU forward
+      train.py                  # training loop + evaluation utilities
+    mitigation/
+      characterise_bp.py        # Part 0: gradient variance vs n_qubits and depth
+      local_cost.py             # Mitigation 1: Σ⟨Z_i⟩ vs global Z⊗…⊗Z
+      layer_by_layer.py         # Mitigation 2: layer-by-layer training schedule
+      transfer_learning.py      # Mitigation 3: frozen CIFAR-10 backbone + shallow VQC
+      compare.py                # head-to-head table + conclusions
+    figures/                    # 6 PNG figures (BP decay, training curves, comparison bar)
+    results/                    # 3 CSVs + cifar10_backbone.pt
   docs/convex_failure.md        # why the convex landscape is excluded
   tests/                        # 49 tests: norm/Hermiticity, gradients/minima, Adam-reduction
-  results/                      # CSV logs
-  figures/                      # PNG figures
+  results/                      # CSV logs (Parts A + B)
+  figures/                      # PNG figures (Parts A + B)
   data/                         # datasets (gitignored)
 ```
 
@@ -276,6 +354,15 @@ python -m partB_gradhd.run_experiments --dataset cifar10 --seeds 0 1 2 3 4
 python -m partB_gradhd.run_experiments --dataset mri            # needs the dataset (below)
 python -m partB_gradhd.run_ablation --seeds 0 1 2 3 4           # α/β/γ sweeps on MNIST
 python -m partB_gradhd.run_2d_classical                         # GradHD vs QHD on 2D
+
+# Part C  (GPU strongly preferred; PennyLane default.qubit stays on CPU)
+cd partC_qml
+python mitigation/characterise_bp.py   # Part 0: BP variance (~1 min)
+python mitigation/local_cost.py        # M1: local cost (~17 min, 3 seeds × 20 epochs)
+python mitigation/layer_by_layer.py    # M2: layer-by-layer (~17 min)
+python mitigation/transfer_learning.py # M3: transfer learning (~12 min)
+python mitigation/compare.py           # comparison table + bar chart
+cd ..
 
 pytest tests/ -q                                                # 49 tests
 ```
